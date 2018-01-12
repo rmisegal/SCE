@@ -1,5 +1,5 @@
 function varargout = main(varargin)
-%1.06
+% 1.06
 % 2DO: problem with lda20, should fix the ldaLeav20 matrix.
 
 
