@@ -28,7 +28,7 @@ function varargout = main(varargin)
 
 % Edit the above text to modify the response to help main
 
-% Last Modified by GUIDE v2.5 12-Jan-2018 16:51:16
+% Last Modified by GUIDE v2.5 17-Jan-2018 12:17:27
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -337,7 +337,7 @@ set( handles.custum, 'Visible', 'off');
 
 hMain = getappdata(0,'hMain');
 Data = getappdata(hMain,'data');
-CD=[];
+
 if ~isempty(Data)
     CD=Data.CD;
     rmappdata(hMain, 'data');
@@ -345,43 +345,52 @@ else
    CD='.\Database\2categories.xls'; 
 end
 [a,b,c] = uigetfile({'*.xls;*.xlsx;','Excel Files';'*.*','All Files'},'Choose Data',CD);
-Data=importdata([b,a]);
-Data.names=fieldnames(Data);
-Data.Y=[];
-Data.X=[];
-Data.OriginalX=[];
-Data.Xaxis=[];
-Data.CD=b;
-Data.PCAdata=[];
+if(not(strcmp(a,'')) || not(strcmp(b,'')))
+    %h = waitbar(0,'Please wait...');
+    %waitbar(10/100);
+    Data=importdata([b,a]);
+    %waitbar(30/100);
+    %pause(2);
+    Data.names=fieldnames(Data);
+    Data.Y=[];
+    Data.X=[];
+    Data.OriginalX=[];
+    Data.Xaxis=[];
+    Data.CD=b;
+    Data.PCAdata=[];
 
-Data.numOfLabels = size(Data.names,1);
-for i=1:Data.numOfLabels
-    Data = setfield(Data,['label' int2str(i)],getfield(Data,Data.names{i,1}));
-    Data.Y = [Data.Y,i*ones(1,size(getfield(Data,Data.names{i,1}),2))];
-    Data.X = [Data.X,getfield(Data,Data.names{i,1})];
-    Data = rmfield(Data,Data.names{i,1});
+    Data.numOfLabels = size(Data.names,1);
+    for i=1:Data.numOfLabels
+        %waitbar((i+60)/100);
+        % pause(0.2);
+        Data = setfield(Data,['label' int2str(i)],getfield(Data,Data.names{i,1}));
+        Data.Y = [Data.Y,i*ones(1,size(getfield(Data,Data.names{i,1}),2))];
+        Data.X = [Data.X,getfield(Data,Data.names{i,1})];
+        Data = rmfield(Data,Data.names{i,1});
+    end
+
+    Data.OriginalX=Data.X;
+    [Data.numOfFeatures,Data.numOfObservations] = size(Data.X);
+    Data.RangeFlag=0;
+    Data.XaxisFlag=0;
+    Data.NewXaxis=1:Data.numOfFeatures;
+    Data.OriginalXaxis=1:Data.numOfFeatures;
+
+    Data.color=[0 0 255 ; 255 0 0 ; 0 255 0 ; 0 255 255 ; 255 0 255 ; 255 255 0 ; 255 215 0 ; 255 145 0 ;...
+        0 160 255 ; 1 1 1 ; 70 25 190 ; 209 58 232 ; 255 17 152  ; 75 150 0 ; 190 190 190 ; 160 210 120 ; 150 50 100 ]/255;
+
+    setappdata(hMain, 'data',Data);
+    plotdatafunc(Data, handles);
+    set( handles.TtestPB, 'Visible', 'on');
+    set(handles.SVMPB, 'Visible', 'on');
+    set( handles.custum, 'Visible', 'on');
+    %close(h);
 end
-
-Data.OriginalX=Data.X;
-[Data.numOfFeatures,Data.numOfObservations] = size(Data.X);
-Data.RangeFlag=0;
-Data.XaxisFlag=0;
-Data.NewXaxis=1:Data.numOfFeatures;
-Data.OriginalXaxis=1:Data.numOfFeatures;
-
-Data.color=[0 0 255 ; 255 0 0 ; 0 255 0 ; 0 255 255 ; 255 0 255 ; 255 255 0 ; 255 215 0 ; 255 145 0 ;...
-    0 160 255 ; 1 1 1 ; 70 25 190 ; 209 58 232 ; 255 17 152  ; 75 150 0 ; 190 190 190 ; 160 210 120 ; 150 50 100 ]/255;
-
-setappdata(hMain, 'data',Data);
-plotdatafunc(Data, handles);
-
 set( handles.LDA, 'Visible', 'on');
 set( handles.PCA, 'Visible', 'on');
 set( handles.IndexToFreq, 'Visible', 'on');
 set( handles.ChooseRangePB, 'Visible', 'on');
-set( handles.TtestPB, 'Visible', 'on');
-set(handles.SVMPB, 'Visible', 'on');
-set( handles.custum, 'Visible', 'on');
+
 function FileMenu_Callback(hObject, eventdata, handles)
 function OpenMenuItem_Callback(hObject, eventdata, handles)
 % hObject    handle to OpenMenuItem (see GCBO)
@@ -460,27 +469,36 @@ end
 function export_Callback(hObject, eventdata, handles)
 hMain = getappdata(0,'hMain');
 Data = getappdata(hMain, 'data');
-delete('PCA.xlsx');
-handles.message.String = 'calculating...';
-pause(0.01);
-if handles.coefficient.Value
-    for j=1:Data.numOfLabels
-        xlswrite('PCA.xlsx',Data.PCAdata.scores(:,find(Data.Y == j)),['coefficients of ' Data.names{j}]);
-    end
-end
-if handles.EigenValues.Value
-    xlswrite('PCA.xlsx',Data.PCAdata.eigenValues','eigenValues');
-end
-if handles.scores.Value
-    xlswrite('PCA.xlsx',Data.PCAdata.coeff,'eigenVectors');
-end
-if handles.Weights.Value
-    xlswrite('PCA.xlsx',Data.PCAdata.wights','wights');
-end
 if ~handles.coefficient.Value && ~handles.EigenValues.Value && ~handles.scores.Value && ~handles.Weights.Value
     errordlg('Choose options to export.', 'PCA error 2');
+    return;
 end
-handles.message.String = 'the data was exported to PCA.xlsx';
+
+CD='.\Parameters\PCA.xlsx'; 
+a=0;
+b=0;
+[a,b,c] = uigetfile({'*.xls;*.xlsx;','Excel Files';'*.*','All Files'},'Choose Data',CD);
+if(ischar(a) || ischar(b))
+    fileName = strcat(b,a);
+    delete(fileName);
+    handles.message.String = 'calculating...';
+    pause(0.01);
+    if handles.coefficient.Value
+        for j=1:Data.numOfLabels
+            xlswrite(fileName,Data.PCAdata.scores(:,find(Data.Y == j)),['coefficients of ' Data.names{j}]);
+        end
+    end
+    if handles.EigenValues.Value
+        xlswrite(fileName,Data.PCAdata.eigenValues','eigenValues');
+    end
+    if handles.scores.Value
+        xlswrite(fileName,Data.PCAdata.coeff,'eigenVectors');
+    end
+    if handles.Weights.Value
+        xlswrite(fileName,Data.PCAdata.wights','wights');
+    end
+    handles.message.String = strcat('the data was exported to ', fileName);
+end
 function PCA_Numbers_CreateFcn(hObject, eventdata, handles)
 % hObject    handle to PCA_Numbers (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
@@ -1360,3 +1378,36 @@ grid on
 
 Srate0=my_classifier_1( X , Y  , Data.names , classifier , K , BoxConstraint , kerstr , pcaflag , info , pcnum  )
 Srate1=my_classifier_1( X.*(ones(size(X,1),1)*R) , Y  , Data.names , classifier , K , BoxConstraint , kerstr , pcaflag , info , pcnum  )
+
+
+% --- Executes on button press in Export to file Group.
+function EigenValues_Callback(hObject, eventdata, handles)
+if handles.EigenValues.Value
+    handles.EigenValues.Value=1;    
+else
+    handles.EigenValues.Value=0;    
+end
+
+% --- Executes on button press in Export to file Group.
+function scores_Callback(hObject, eventdata, handles)
+if handles.scores.Value
+    handles.scores.Value=1;    
+else
+    handles.scores.Value=0;    
+end
+
+% --- Executes on button press in Export to file Group.
+function coefficient_Callback(hObject, eventdata, handles)
+if handles.coefficient.Value
+    handles.coefficient.Value=1;    
+else
+    handles.coefficient.Value=0;    
+end
+
+% --- Executes on button press in Export to file Group.
+function Weights_Callback(hObject, eventdata, handles)
+if handles.Weights.Value
+    handles.Weights.Value=1;    
+else
+    handles.EigenValues.Value=0;    
+end
