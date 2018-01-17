@@ -1,10 +1,8 @@
+
+
 function varargout = main(varargin)
-% 1.06
+% 1.07 - Rami first working version
 % 2DO: problem with lda20, should fix the ldaLeav20 matrix.
-
-
-
-
 
 
 %   MAIN MATLAB code for main.fig
@@ -30,7 +28,7 @@ function varargout = main(varargin)
 
 % Edit the above text to modify the response to help main
 
-% Last Modified by GUIDE v2.5 31-Jul-2017 20:26:51
+% Last Modified by GUIDE v2.5 12-Jan-2018 16:51:16
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -343,6 +341,8 @@ CD=[];
 if ~isempty(Data)
     CD=Data.CD;
     rmappdata(hMain, 'data');
+else
+   CD='.\Database\2categories.xls'; 
 end
 [a,b,c] = uigetfile({'*.xls;*.xlsx;','Excel Files';'*.*','All Files'},'Choose Data',CD);
 Data=importdata([b,a]);
@@ -1360,5 +1360,3 @@ grid on
 
 Srate0=my_classifier_1( X , Y  , Data.names , classifier , K , BoxConstraint , kerstr , pcaflag , info , pcnum  )
 Srate1=my_classifier_1( X.*(ones(size(X,1),1)*R) , Y  , Data.names , classifier , K , BoxConstraint , kerstr , pcaflag , info , pcnum  )
-
-
