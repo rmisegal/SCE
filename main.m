@@ -28,7 +28,7 @@ function varargout = main(varargin)
 
 % Edit the above text to modify the response to help main
 
-% Last Modified by GUIDE v2.5 17-Jan-2018 12:17:27
+% Last Modified by GUIDE v2.5 07-Feb-2018 08:26:31
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -76,6 +76,7 @@ set( handles.uipanel1, 'Visible', 'off')
 set( handles.uibuttongroup5, 'Visible', 'off')
 set( handles.uipanel2, 'Visible', 'off')
 % set( handles.uipanel2.Children, 'Visible', 'off')
+set(handles.uipanel10,'Visible','off')
 
 
 
@@ -111,6 +112,9 @@ if(isempty(Data))
 end
 if isempty(Data.Xaxis)
     [a,b,c] = uigetfile({'*.xls;*.xlsx;','Excel Files';'*.*','All Files'},'Choose Data',Data.CD);
+    if( isnumeric(a) || isnumeric(b) )
+        return; %Select empty file
+    end
     temp=importdata([b,a]);
     Data.CD=b;
     setappdata(hMain, 'data',Data);
@@ -162,10 +166,12 @@ if strcmp(handles.ChooseRangeTXT.Visible,'off')
         handles.ChooseRangeTXT.String=['1:' int2str(Data.numOfFeatures)];
         handles.ChooseRangeTXT.Value=1;
     end
+    set(handles.uipanel10,'Visible','on')
     set( handles.ChooseRangeTXT, 'Visible', 'on');
     set( handles.ChooseRangePB2, 'Visible', 'on');
     set( handles.ExampleText1, 'Visible', 'on');
 else
+    set(handles.uipanel10,'Visible','off')
     set( handles.ChooseRangeTXT, 'Visible', 'off');
     set( handles.ChooseRangePB2, 'Visible', 'off');
     set( handles.ExampleText1, 'Visible', 'off');
@@ -182,6 +188,7 @@ if(isempty(Data))
 end
 
 Data.NewXaxis=str2num(handles.ChooseRangeTXT.String);
+Data.NewXaxis=sort(unique(Data.NewXaxis));% remove overlaps ranges
 
 if length(Data.NewXaxis)==length(Data.OriginalX(:,1))
     Data.RangeFlag=0;
@@ -235,6 +242,7 @@ plotdatafunc(Data, handles);
 set( handles.ChooseRangeTXT, 'Visible', 'off');
 set( handles.ChooseRangePB2, 'Visible', 'off');
 set( handles.ExampleText1, 'Visible', 'off');
+set(handles.uipanel10,'Visible','off')
 setappdata(hMain, 'data',Data);
 % --- Executes on button press in PCA.
 function PCA_Callback(hObject, eventdata, handles)
@@ -265,7 +273,7 @@ if(isempty(Data))
     errordlg('No data was imported');
     return;
 end
-Data.PCAdata.options=choosedialogPCA;
+Data.PCAdata.options=choosedialogPCA;% Call dialog box 
 
 PCA(Data.PCAdata.options);
 
@@ -345,7 +353,8 @@ else
    CD='.\Database\2categories.xls'; 
 end
 [a,b,c] = uigetfile({'*.xls;*.xlsx;','Excel Files';'*.*','All Files'},'Choose Data',CD);
-if(not(strcmp(a,'')) || not(strcmp(b,'')))
+
+if(not(isnumeric(a)) || not(isnumeric(b)) )
     %h = waitbar(0,'Please wait...');
     %waitbar(10/100);
     Data=importdata([b,a]);
@@ -474,10 +483,14 @@ if ~handles.coefficient.Value && ~handles.EigenValues.Value && ~handles.scores.V
     return;
 end
 
+warning('off','MATLAB:xlswrite:AddSheet');
 CD='.\Parameters\PCA.xlsx'; 
+%CD='P:\BenGurion\P_SCE\Param';
 a=0;
 b=0;
+%sheet_index=1;
 [a,b,c] = uigetfile({'*.xls;*.xlsx;','Excel Files';'*.*','All Files'},'Choose Data',CD);
+
 if(ischar(a) || ischar(b))
     fileName = strcat(b,a);
     delete(fileName);
@@ -486,17 +499,33 @@ if(ischar(a) || ischar(b))
     if handles.coefficient.Value
         for j=1:Data.numOfLabels
             xlswrite(fileName,Data.PCAdata.scores(:,find(Data.Y == j)),['coefficients of ' Data.names{j}]);
+%             t1=array2table(Data.PCAdata.scores(:,find(Data.Y == j)));
+%             writetable(t1,fileName,'Sheet',sheet_index,'WriteVariableNames',true);
+%             sheet_index=sheet_index+1;
         end
     end
+    
     if handles.EigenValues.Value
         xlswrite(fileName,Data.PCAdata.eigenValues','eigenValues');
+        %t1=array2table(Data.PCAdata.eigenValues','VariableNames',{'eigenValues'});
+        %writetable(t1,fileName,'Sheet',sheet_index,'WriteVariableNames',true);
+        %sheet_index=sheet_index+1;
     end
+    
     if handles.scores.Value
         xlswrite(fileName,Data.PCAdata.coeff,'eigenVectors');
+%         t1=array2table(Data.PCAdata.coeff);
+%         writetable(t1,fileName,'Sheet',sheet_index,'WriteVariableNames',true);
+%         sheet_index=sheet_index+1;
     end
+    
     if handles.Weights.Value
         xlswrite(fileName,Data.PCAdata.wights','wights');
+%         t1=array2table(Data.PCAdata.wights','VariableNames',{'wights'});
+%         writetable(t1,fileName,'Sheet',sheet_index,'WriteVariableNames',true);
+%         sheet_index=sheet_index+1;        
     end
+    
     handles.message.String = strcat('the data was exported to ', fileName);
 end
 function PCA_Numbers_CreateFcn(hObject, eventdata, handles)
@@ -513,7 +542,8 @@ function exportGraph_Callback(hObject, eventdata, handles)
 % hObject    handle to exportGraph (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-num = str2num(handles.PCA_Numbers.String);
+warning('off','MATLAB:xlswrite:AddSheet');
+num = str2num(handles.PCA_Numbers.String);% get PCs IDs
 if isempty(num)
     errordlg('Not a valid input. Choose your PCs first.', 'PCA error 3');
     return;
@@ -523,27 +553,37 @@ hMain = getappdata(0,'hMain');
 Data = getappdata(hMain, 'data');
 handles.message.String = 'calculating...';
 pause(0.01);
-string = ['PCA_' replace(num2str(num)) '.xlsx'];
+[filename,pathname] = uiputfile('.\Parameters\*.xlsx','Save as Export Graph file name');
+if isequal(filename,0) || isequal(pathname,0)
+   return; % disp('User selected Cancel')
+end
+Pcs_str = handles.PCA_Numbers.String; %add to gilename the Pcs id values
+Pcs_str = replace(Pcs_str,',','_');
+Pcs_str = [Pcs_str '.'];
+filename = replace(filename,'.',Pcs_str);
+string = [pathname filename];
+%string = ['PCA_' replace(num2str(num)) '.xlsx'];
 for j=1:Data.numOfLabels
     xlswrite(string,[num' Data.PCAdata.scores(num,find(Data.Y == j))],Data.names{j});
 end
 handles.message.String = ['the data was exported to ' string];
-function string2 = replace(string)
-i=1;
-string2=[];
-while (i<size(string,2)+1)
-    if string(i) == ' '
-        j=i;
-        while(string(j)==' ')
-            j=j+1;
-        end
-        string2(size(string2,2)+1) = '_';
-        i=j;
-    else
-        string2(size(string2,2)+1) = string(i);
-        i=i+1;
-    end
-end
+
+% function string2 = replace(string)
+% i=1;
+% string2=[];
+% while (i<size(string,2)+1)
+%     if string(i) == ' '
+%         j=i;
+%         while(string(j)==' ')
+%             j=j+1;
+%         end
+%         string2(size(string2,2)+1) = '_';
+%         i=j;
+%     else
+%         string2(size(string2,2)+1) = string(i);
+%         i=i+1;
+%     end
+% end
 function edit5_Callback(hObject, eventdata, handles)
 function edit5_CreateFcn(hObject, eventdata, handles)
 % hObject    handle to edit5 (see GCBO)
@@ -1411,3 +1451,10 @@ if handles.Weights.Value
 else
     handles.EigenValues.Value=0;    
 end
+function PCA_Numbers_Callback(hObject, eventdata, handles)
+% hObject    handle toPCA_Numbers (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+% Hints: get(hObject,'String') returns contents of PCA_Numbers as text
+%        str2double(get(hObject,'String')) returns contents of PCA_Numbers as a double
+% --- Executes during object creation, after setting all properties.
