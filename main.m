@@ -1,5 +1,3 @@
-
-
 function varargout = main(varargin)
 % 1.07 - Rami first working version
 % 2DO: problem with lda20, should fix the ldaLeav20 matrix.
@@ -47,6 +45,18 @@ if nargout
 else
     gui_mainfcn(gui_State, varargin{:});
 end
+
+function initMain()
+%======Global Varibles===============
+global GLB;
+root_folder = '.';
+output_folder_name = 'Outputs';
+databse_folder_name = 'Database';
+GLB.FOLDER_OUTPUT = fullfile(root_folder, output_folder_name); 
+GLB.FOLDER_DATABASE = fullfile(root_folder, databse_folder_name);
+%======End of Global Varibles========
+KillExcel_COM_Process(); %Remove lefted Excel ActiveX's
+
 % End initialization code - DO NOT EDIT
 % --- Executes just before main is made visible.
 function main_OpeningFcn(hObject, eventdata, handles, varargin)
@@ -77,7 +87,7 @@ set( handles.uibuttongroup5, 'Visible', 'off')
 set( handles.uipanel2, 'Visible', 'off')
 % set( handles.uipanel2.Children, 'Visible', 'off')
 set(handles.uipanel10,'Visible','off')
-
+initMain();
 
 
 
@@ -101,9 +111,10 @@ function varargout = main_OutputFcn(hObject, eventdata, handles)
 
 % Get default command line output from handles structure
 varargout{1} = handles.output;
-% --- Executes on button press in IndexToFreq.
+% --- Executes on button press in IndexToFreq.(Index to Wave No.)
 function Xaxis_Callback(hObject, eventdata, handles)
 
+KillExcel_COM_Process();
 hMain = getappdata(0,'hMain');
 Data = getappdata(hMain, 'data');
 if(isempty(Data))
@@ -115,22 +126,30 @@ if isempty(Data.Xaxis)
     if( isnumeric(a) || isnumeric(b) )
         return; %Select empty file
     end
-    temp=importdata([b,a]);
+    
+    FileName=fullfile(b, a); 
+    [FileType,~,loadCmd,descr] = finfo(FileName);
+    tempStracure=importdata(FileName);
+    S.type = '.';
+    S.subs = char(descr(1)); %Read the Sheet1 name
+    temp = subsref(tempStracure,S); % the same as temp=tempStracure.Sheet1
     Data.CD=b;
     setappdata(hMain, 'data',Data);
     if length(temp)~=Data.numOfFeatures
         errordlg('Axis length do not match');
         return;
     end
-    Data.Xaxis=temp;
+    Data.Xaxis=sort(temp);
     Data.XaxisBackup=Data.Xaxis;
 end
-Data.XaxisFlag=1;
-plotdatafunc(Data, handles);
+Data.XaxisFlag=1; %Set Wave Length mode is on
+plotdatafunc(Data, handles);% Draw graph per observation (color per group)
 
 set( handles.IndexToFreq, 'Visible', 'off');
 set( handles.FreqToIndex, 'Visible', 'on');
 setappdata(hMain, 'data',Data);
+
+
 function Xaxis2_Callback(hObject, eventdata, handles)
 
 hMain = getappdata(0,'hMain');
@@ -139,7 +158,7 @@ if(isempty(Data))
     errordlg('No data was imported');
     return;
 end
-Data.XaxisFlag=0;
+Data.XaxisFlag=0; % X display Index
 plotdatafunc(Data, handles);
 set( handles.FreqToIndex, 'Visible', 'off');
 set( handles.IndexToFreq, 'Visible', 'on');
@@ -187,17 +206,36 @@ if(isempty(Data))
     return;
 end
 
-Data.NewXaxis=str2num(handles.ChooseRangeTXT.String);
+%Check range boundaries
+myTmpX=str2num(handles.ChooseRangeTXT.String);
+myOrifinalLength = length(Data.OriginalX(:,1));
+myMaxRange = max(myTmpX);
+myMinRange =  min(myTmpX);
+if Data.XaxisFlag
+    if myMaxRange > max(Data.XaxisBackup) || myMinRange < min(Data.XaxisBackup)
+        errordlg(['The X axis is in Wave-Length mode. The Range should be between: ' num2str(ceil(min(Data.XaxisBackup))) '-' num2str(floor(max(Data.XaxisBackup)))]);  
+        return;
+    end
+    
+else  
+    if myMaxRange > myOrifinalLength || myMinRange < 1 
+        errordlg(['The X axis is in Index mode. The Range should be between 1-' num2str(myOrifinalLength)]);  
+        return;
+    end
+end
+        
+        
+Data.NewXaxis=myTmpX;
 Data.NewXaxis=sort(unique(Data.NewXaxis));% remove overlaps ranges
 
 if length(Data.NewXaxis)==length(Data.OriginalX(:,1))
-    Data.RangeFlag=0;
+    Data.RangeFlag=0; % Set Select Range to Off (to full Range)
 else
-    Data.RangeFlag=1;
+    Data.RangeFlag=1; % Set Select Range to On
 end
 temp1=find(handles.ChooseRangeTXT.String==',');
 numofranges=length(temp1)+1;
-if Data.XaxisFlag
+if Data.XaxisFlag %Check if Wave Length mode is on
     if numofranges>1
         for i=1:numofranges
             if i==1
@@ -214,14 +252,18 @@ if Data.XaxisFlag
         range=[temprange(1),temprange(end)];
     end
     Data.NewXaxis=[];
+    %Generate WaveLength sequance index from minimum to maximum range
+    %step=1
     for i=1:numofranges
         [trash, a]=min(abs(Data.XaxisBackup-range(i,1)));
         [trash, b]=min(abs(Data.XaxisBackup-range(i,2)));
-        Data.NewXaxis=[Data.NewXaxis,Data.XaxisBackup(a:b)];
+        %Data.NewXaxis=[Data.NewXaxis,Data.XaxisBackup(a:b)];
+        Data.NewXaxis=unique([Data.NewXaxis' Data.XaxisBackup(a:b)']');
     end
 end
 
-if Data.XaxisFlag
+%Convert WaveLength sequance into actuale exiting Wavelangth 
+if Data.XaxisFlag %Check if Wave Length mode is on
     temp=Data.NewXaxis;
     Data.NewXaxis=zeros(1,length(temp));
     for i=1:length(temp)
@@ -327,7 +369,8 @@ function ImportData_Callback(hObject, eventdata, handles)
 % hObject    handle to ImportData (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-
+global GLB;
+KillExcel_COM_Process(); %Remove opened Excel ActiveX's process
 set( handles.uibuttongroup6.Children, 'Visible', 'off')
 set( handles.uibuttongroup5.Children, 'Visible', 'off')
 set( handles.uipanel1, 'Visible', 'off')
@@ -350,7 +393,8 @@ if ~isempty(Data)
     CD=Data.CD;
     rmappdata(hMain, 'data');
 else
-   CD='.\Database\2categories.xls'; 
+   %CD='.\Database\2categories.xls'; 
+   CD= fullfile(GLB.FOLDER_DATABASE, '2categories.xls');
 end
 [a,b,c] = uigetfile({'*.xls;*.xlsx;','Excel Files';'*.*','All Files'},'Choose Data',CD);
 
@@ -380,8 +424,8 @@ if(not(isnumeric(a)) || not(isnumeric(b)) )
 
     Data.OriginalX=Data.X;
     [Data.numOfFeatures,Data.numOfObservations] = size(Data.X);
-    Data.RangeFlag=0;
-    Data.XaxisFlag=0;
+    Data.RangeFlag=0;% Set Select Range to Off (to full Range)
+    Data.XaxisFlag=0;%reset Wave Length mode to off
     Data.NewXaxis=1:Data.numOfFeatures;
     Data.OriginalXaxis=1:Data.numOfFeatures;
 
@@ -399,6 +443,7 @@ set( handles.LDA, 'Visible', 'on');
 set( handles.PCA, 'Visible', 'on');
 set( handles.IndexToFreq, 'Visible', 'on');
 set( handles.ChooseRangePB, 'Visible', 'on');
+KillExcel_COM_Process(); %Remove opened Excel ActiveX's process
 
 function FileMenu_Callback(hObject, eventdata, handles)
 function OpenMenuItem_Callback(hObject, eventdata, handles)
@@ -476,6 +521,7 @@ switch i
         hold off;
 end
 function export_Callback(hObject, eventdata, handles)
+global GLB;
 hMain = getappdata(0,'hMain');
 Data = getappdata(hMain, 'data');
 if ~handles.coefficient.Value && ~handles.EigenValues.Value && ~handles.scores.Value && ~handles.Weights.Value
@@ -483,22 +529,27 @@ if ~handles.coefficient.Value && ~handles.EigenValues.Value && ~handles.scores.V
     return;
 end
 
+KillExcel_COM_Process(); %Remove opened Excel ActiveX's process
 warning('off','MATLAB:xlswrite:AddSheet');
-CD='.\Parameters\PCA.xlsx'; 
+warning('off','MATLAB:DELETE:FileNotFound');
+CD= fullfile(GLB.FOLDER_OUTPUT,'PCA.xlsx');
 %CD='P:\BenGurion\P_SCE\Param';
 a=0;
 b=0;
 %sheet_index=1;
-[a,b,c] = uigetfile({'*.xls;*.xlsx;','Excel Files';'*.*','All Files'},'Choose Data',CD);
+[a,b] = uiputfile(CD,'Save as Parameters file name');
+%[a,b,c] = uigetfile({'*.xls;*.xlsx;','Excel Files';'*.*','All Files'},'Choose Data',CD);
 
 if(ischar(a) || ischar(b))
     fileName = strcat(b,a);
+    KillExcel_COM_Process(); %Remove opened Excel ActiveX's process
     delete(fileName);
     handles.message.String = 'calculating...';
     pause(0.01);
     if handles.coefficient.Value
         for j=1:Data.numOfLabels
             xlswrite(fileName,Data.PCAdata.scores(:,find(Data.Y == j)),['coefficients of ' Data.names{j}]);
+            KillExcel_COM_Process(); %Remove opened Excel ActiveX's process
 %             t1=array2table(Data.PCAdata.scores(:,find(Data.Y == j)));
 %             writetable(t1,fileName,'Sheet',sheet_index,'WriteVariableNames',true);
 %             sheet_index=sheet_index+1;
@@ -507,6 +558,7 @@ if(ischar(a) || ischar(b))
     
     if handles.EigenValues.Value
         xlswrite(fileName,Data.PCAdata.eigenValues','eigenValues');
+        KillExcel_COM_Process(); %Remove opened Excel ActiveX's process
         %t1=array2table(Data.PCAdata.eigenValues','VariableNames',{'eigenValues'});
         %writetable(t1,fileName,'Sheet',sheet_index,'WriteVariableNames',true);
         %sheet_index=sheet_index+1;
@@ -514,6 +566,7 @@ if(ischar(a) || ischar(b))
     
     if handles.scores.Value
         xlswrite(fileName,Data.PCAdata.coeff,'eigenVectors');
+        KillExcel_COM_Process(); %Remove opened Excel ActiveX's process
 %         t1=array2table(Data.PCAdata.coeff);
 %         writetable(t1,fileName,'Sheet',sheet_index,'WriteVariableNames',true);
 %         sheet_index=sheet_index+1;
@@ -521,12 +574,14 @@ if(ischar(a) || ischar(b))
     
     if handles.Weights.Value
         xlswrite(fileName,Data.PCAdata.wights','wights');
+        KillExcel_COM_Process(); %Remove opened Excel ActiveX's process
 %         t1=array2table(Data.PCAdata.wights','VariableNames',{'wights'});
 %         writetable(t1,fileName,'Sheet',sheet_index,'WriteVariableNames',true);
 %         sheet_index=sheet_index+1;        
     end
     
     handles.message.String = strcat('the data was exported to ', fileName);
+    KillExcel_COM_Process(); %Remove opened Excel ActiveX's process
 end
 function PCA_Numbers_CreateFcn(hObject, eventdata, handles)
 % hObject    handle to PCA_Numbers (see GCBO)
@@ -542,6 +597,8 @@ function exportGraph_Callback(hObject, eventdata, handles)
 % hObject    handle to exportGraph (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+global GLB;
+KillExcel_COM_Process(); %Remove opened Excel ActiveX's process
 warning('off','MATLAB:xlswrite:AddSheet');
 num = str2num(handles.PCA_Numbers.String);% get PCs IDs
 if isempty(num)
@@ -553,7 +610,8 @@ hMain = getappdata(0,'hMain');
 Data = getappdata(hMain, 'data');
 handles.message.String = 'calculating...';
 pause(0.01);
-[filename,pathname] = uiputfile('.\Parameters\*.xlsx','Save as Export Graph file name');
+tmpStr= fullfile(GLB.FOLDER_OUTPUT, '*.xlsx');
+[filename,pathname] = uiputfile(tmpStr,'Save as Export Graph file name');
 if isequal(filename,0) || isequal(pathname,0)
    return; % disp('User selected Cancel')
 end
@@ -565,8 +623,10 @@ string = [pathname filename];
 %string = ['PCA_' replace(num2str(num)) '.xlsx'];
 for j=1:Data.numOfLabels
     xlswrite(string,[num' Data.PCAdata.scores(num,find(Data.Y == j))],Data.names{j});
+    KillExcel_COM_Process(); %Remove opened Excel ActiveX's process
 end
 handles.message.String = ['the data was exported to ' string];
+KillExcel_COM_Process(); %Remove opened Excel ActiveX's process
 
 % function string2 = replace(string)
 % i=1;
@@ -812,14 +872,14 @@ if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgr
 end
 function plotdatafunc(Data, handles)
 
-if Data.RangeFlag
-    if Data.XaxisFlag
+if Data.RangeFlag % check if Select Range is on
+    if Data.XaxisFlag %Check if Wave Length mode is on
         axis=Data.Xaxis;
     else
-        axis=1:Data.numOfFeatures;
+        axis = Data.NewXaxis;
     end
-else
-    if Data.XaxisFlag
+else %Select Range is off
+    if Data.XaxisFlag %Check if Wave Length mode is on
         axis=Data.Xaxis;
     else
         axis=1:Data.numOfFeatures;
@@ -829,8 +889,8 @@ end
 cla;
 hold on;
 h = {};
-a=ones(1,Data.numOfLabels);
-b=zeros(1,Data.numOfLabels);
+a=ones(1,Data.numOfLabels);% 'a' will hold the start position in Data.X where each group start
+b=zeros(1,Data.numOfLabels);% 'b' will hold the number of observation per group
 for i=1:Data.numOfLabels
     if i==Data.numOfLabels
         b(i)=length(eval(['Data.label' int2str(i) '(1,:)']));
@@ -840,6 +900,7 @@ for i=1:Data.numOfLabels
     end
 end
 for i=1:Data.numOfLabels
+    %Draw all observation per group with with diff. color per group. 
     h{i} = plot(axis,Data.X(:,sum(a(1:i)):sum(b(1:i))),'color',Data.color(i,:));
     h{i}(2:end) = [];
 end
@@ -935,14 +996,14 @@ end
 % else
 %     axis=Data.Xaxis;
 % end
-if Data.RangeFlag
-    if Data.XaxisFlag
+if Data.RangeFlag % check if Select Range is on
+    if Data.XaxisFlag %Check if Wave Length mode is on
         axis=Data.Xaxis;
     else
         axis=1:Data.numOfFeatures;
     end
-else
-    if Data.XaxisFlag
+else % Select Range is off
+    if Data.XaxisFlag %Check if Wave Length mode is on
         axis=Data.Xaxis;
     else
         axis=1:Data.numOfFeatures;
