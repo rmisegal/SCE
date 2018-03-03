@@ -211,6 +211,10 @@ myTmpX=str2num(handles.ChooseRangeTXT.String);
 myOrifinalLength = length(Data.OriginalX(:,1));
 myMaxRange = max(myTmpX);
 myMinRange =  min(myTmpX);
+if isempty(myTmpX)|| isempty(myMaxRange) || isempty(myMinRange) ||  myMaxRange <= myMinRange
+    errordlg(['Incorrect Range definition!: ' handles.ChooseRangeTXT.String]);  
+    return;
+end
 if Data.XaxisFlag
     if myMaxRange > max(Data.XaxisBackup) || myMinRange < min(Data.XaxisBackup)
         errordlg(['The X axis is in Wave-Length mode. The Range should be between: ' num2str(ceil(min(Data.XaxisBackup))) '-' num2str(floor(max(Data.XaxisBackup)))]);  
@@ -705,7 +709,7 @@ function LDAexportcm_Callback(hObject, eventdata, handles)
 % hObject    handle to LDAexportcm (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-
+global GLB;
 hMain = getappdata(0,'hMain');
 Data = getappdata(hMain, 'data');
 num {1,1} = num2str(Data.numOfFeatures+1);
@@ -740,13 +744,22 @@ if handles.LDAloo.Value
     Data.LDA.CM = CM;
     string = ['LDA -leave one out test - confusion matrix PC' num{1,1} '.xlsx'];
 end
+
+h1=waitbar(0.75,'Save results to Excel file in the Output folder');
+string= fullfile(GLB.FOLDER_OUTPUT, string);
+KillExcel_COM_Process();
 xlswrite(string,Data.LDA.CM,'confusion matrix');
+KillExcel_COM_Process();
 handles.message.String = ['the data was exported to ' string];
+close(h1); %close waitbar
 setappdata(hMain, 'data',Data);
+
+
 function PCAanalyzer_Callback(hObject, eventdata, handles)
 % hObject    handle to PCAanalyzer (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+global GLB;
 hMain = getappdata(0,'hMain');
 Data = getappdata(hMain, 'data');
 num {1,1} = num2str(Data.numOfFeatures+1);
@@ -782,11 +795,11 @@ else
         [ Y ,labels] = ldaLeav20( X , Y ,options);
         a=sum(Y==labels);
         rate(i)=a/size(Y,2);
-        waitbar(i / str2num(num{:}))
+        waitbar(i / 2/str2num(num{:}))
     end
     
 end
-close(h);
+close(h); %close waitbar
 try
     close(2);
 catch
@@ -798,9 +811,16 @@ title(['PCA analyzer til ' num{:} ' PC']);
 xlabel('PC');
 ylabel('success rate');
 hold off;
-string = 'Success_rate_VS_Pcs.xlsx';
+h1=waitbar(0.75,'Save results to Excel file in the Output folder');
+string= fullfile(GLB.FOLDER_OUTPUT, 'Success_rate_VS_Pcs.xlsx');
+KillExcel_COM_Process();
 xlswrite(string,rate','Success rate VS Pcs');
+KillExcel_COM_Process();
 handles.message.String = ['the data was exported to ' string];
+close(h1); %close waitbar
+
+
+
 function edit7_Callback(hObject, eventdata, handles)
 % hObject    handle to edit7 (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
